@@ -382,5 +382,110 @@ title(xlab="probabilistc index", line=2)
 box("figure", col="gray")
 dev.off()
 
+#####################################################################################################################
+#####################################################################################################################           
+           
+# ------------- Analysis of NGP Chromium data -------------
+# load data
+scNGP.10x <- readRDS(choose.files())  # choose dataB
+scNGP.10x <- scNGP.10x$filtered
+summary(rowSums(counts(scNGP.10x)))
+summary(rowSums(counts(scNGP.10x)>0))
+
+# filter genes
+treatment <- scNGP.10x2$treatment
+table(treatment)
+keep.gene <- apply(counts(scNGP.10x2), 1, function(y){
+  #all(tapply(y, treatment, function(x) sum(x>0)>3))
+  (sum(y>0)>=3)  &  sum(y)>=3
+})
+table(keep.gene)
 
 
+scNGP.10x2_filtered <- scNGP.10x2[keep.gene, ]
+scNGP.10x2_filtered 
+summary(rowSums(counts(scNGP.10x2_filtered)))
+summary(rowSums(counts(scNGP.10x2_filtered)>0))
+
+
+# ---------------run DGE  analysis --------------------------------------
+
+source(".../tools_wrap_functions.R")
+scNGP.10x2_filtered$lLS       <- log(colSums(counts(scNGP.10x2_filtered)))       
+res.pim <- run_PIMseq(SCEdata = scNGP.10x2_filtered, condition.name = "treatment",
+                      covariates = "lLS", prop.zero = 1, coxph.aprox = TRUE)
+res.SAMSeq <- run_SAMseq(SCEdata = scNGP.10x2_filtered, condition.name = "treatment",
+                         covariates = NULL, expression.unit = "count", prop.zero = 1)  # SAMSeq is failed
+res.MAST <- run_MAST(SCEdata = scNGP.10x2_filtered, condition.name = "treatment",
+                     covariates = NULL, expression.unit = "CPM", prop.zero = 1)
+res.edgeR_Zinger <- run_edgeR_Zinger(SCEdata = scNGP.10x2_filtered, condition.name = "treatment",
+                                     covariates = NULL, expression.unit = "count", prop.zero = 1)
+res.DESeq2_Zinger <- run_DESeq2_Zinger(SCEdata = scNGP.10x2_filtered, condition.name = "treatment",
+                                       covariates = NULL, expression.unit = "count", prop.zero = 1)
+
+saveRDS(res.pim, ".../scNGP_10x_analysis/res.pim.rds")
+#saveRDS(res.SAMSeq, ".../scNGP_10x_analysis/res.SAMSeq.rds")
+saveRDS(res.MAST, ".../scNGP_10x_analysis/res.MAST.rds")
+saveRDS(res.edgeR_Zinger, ".../scNGP_10x_analysis/res.edgeR_Zinger.rds")
+saveRDS(res.DESeq2_Zinger, "..../scNGP_10x_analysis/res.DESeq2_Zinger.rds")
+
+           
+           
+# ---------------  cross data agreement (Figure 4 -- panel D)----------------
+DE_class.pim    <- as.numeric(res.pim$df$p.adjusted < 0.05 & (res.pim$df$PI<=0.4 | res.pim$df$PI>=0.6))
+DE_class.MAST   <- as.numeric(res.MAST$df$qval < 0.05 & abs(res.edgeR_Zinger$tt$table$logFC)>0.6)
+DE_class.edgeR  <- as.numeric(res.edgeR_Zinger$df$qval < 0.05 & abs(res.edgeR_Zinger$tt$table$logFC)>0.6)
+DE_class.DESeq2 <- as.numeric(res.DESeq2_Zinger$df$padj < 0.05 & abs(res.DESeq2_Zinger$df$log2FoldChange)>0.6)
+
+DE.class_10x <- as.data.frame(cbind(DE_class.pim,  DE_class.MAST, 
+                                    DE_class.edgeR, DE_class.DESeq2))
+rownames(DE.class_10x) <- rownames(scNGP.10x_filtered) 
+colnames(DE.class_10x) <- c("PIM",   "MAST", "edgeR+Zinger", "DESeq2+Zinger")
+DE.class_10xs <- DE.class_10x[complete.cases(DE.class_10x),]
+head(DE.class_10x)
+colSums(DE.class_10x)
+
+DE.class_C1 <- readRDS(".../scNGP_C1_analysis/DE.class.rds")
+head(DE.class_C1)
+colSums(DE.class_C1)
+
+common.genes <- intersect(rownames(DE.class_C1), rownames(DE.class_10x))
+length(common.genes)
+
+DE.class_C12 <- DE.class_C1[common.genes, -2]
+DE.class_10x2 <- DE.class_10x[common.genes,]
+
+common.DE.genes <- t(sapply(common.genes, function(g){
+  v <- numeric(4)
+  for(i in 1:4){
+    v[i] <- as.numeric((DE.class_C12[g, i])==1 & (DE.class_10x2[g, i]==1))
+  }
+  v
+}))
+head(common.DE.genes)
+colSums(common.DE.genes)
+
+cross.data.res <- data.frame(C1=colSums(DE.class_C1[, -2]),
+                             Chromium=colSums(DE.class_10x),
+                             common=colSums(common.DE.genes),
+                             tool=c("PIM", "MAST", "edgeR+Zinger", "DESeq2+Zinger"))
+cross.data.res
+cross.data.res2 <- reshape2::melt(cross.data.res, id.vars="tool")
+library(ggplot2)
+png(filename = "manuscript/V3/supplementary file/scNGP_10x_analysis/cross_data.png", width=5, height=7, 
+    res = 800, units = "cm")
+ggplot(cross.data.res2, aes(x=tool, y=value, group=variable, fill=variable))+
+  geom_bar(stat="identity", position=position_dodge(), width = 0.6, size=0.2, colour="black") +
+  #geom_point(size=3, aes(x=tool, y=value, fill=variable), position=position_dodge()) +
+  labs(y="#DE genes (at 5% FDR)", x=NULL)+
+  #scale_fill_brewer(palette="Paired") + 
+  scale_fill_manual(values=c("deepskyblue4", '#999999', 'darkorange1'))+
+  theme_minimal() + 
+  theme(axis.title.x = element_text(size=8),
+        axis.text.x = element_text(size=8, angle = 45, hjust = 1),
+        axis.text.y = element_text(size=10),
+        legend.title = element_blank(),
+        legend.position = "none",
+        legend.key.size = unit(0.25, 'cm'),
+        legend.spacing.x = unit(0.15, 'cm')) 
+dev.off()
