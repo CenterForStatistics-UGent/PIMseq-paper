@@ -1,13 +1,11 @@
 #Single Cell RNA-seq data analysis piplines 
 
 #Preparing input
-#source("C:/Users/Alemu/Dropbox/scRNA-seq study/Main scRNA-seq study data analysis/scRNA-research/PIMSeq/main_codes/wrapFunction.R")
-
 prepareInput <- function(SCEdata, condition.name, expression.unit, covariates, ncores, p=0.99)
 {
   message("Preparing inputs ...")
   
-  #suppressPackageStartupMessages(library(monocle))
+  suppressPackageStartupMessages(library(monocle))
   
   if(class(SCEdata) != "SingleCellExperiment"){stop("Input is not a 'SingleCellExperiment' class")}
   
@@ -164,132 +162,6 @@ run_MAST <- function(SCEdata, condition.name=NULL, covariates=NULL,
   })
 }
 
-# ## Classical wilcoxon test
-# suppressPackageStartupMessages(library(edgeR))
-# run_Wilcoxon <- function(SCEdata, condition.name=NULL, covariates=NULL,
-#                          expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL) {
-#   message("Wilcoxon ")
-#   
-#   if(!is.null(covariates)){message("Covariates are ignored.")}
-#   L <- prepare_input(SCEdata = SCEdata, condition.name = condition.name, 
-#                      expression.unit = expression.unit, covariates = NULL, ncores = ncores)
-#   
-#   session_info <- sessionInfo()
-#   timing <- system.time({
-#     tmm <- edgeR::calcNormFactors(L$expr.data)
-#     tpmtmm <- edgeR::cpm(L$expr.data, lib.size = tmm * colSums(L$expr.data))
-#     idx <- 1:nrow(tpmtmm)
-#     names(idx) <- rownames(tpmtmm)
-#     wilcox_p <- sapply(idx, function(i) {
-#       wilcox.test(tpmtmm[i, ] ~ L$col.data[, L$conditions])$p.value
-#     })
-#   })
-#   
-#   #hist(wilcox_p, 50)
-#   
-#   list(session_info = session_info,
-#        timing = timing,
-#        df = data.frame(pval = wilcox_p,
-#                        qval = p.adjust(wilcox_p, method = "BH"),
-#                        row.names = names(wilcox_p)))
-# }
-
-# ## SCDE
-# suppressPackageStartupMessages(library(edgeR))
-# 
-# suppressPackageStartupMessages(library(scde))
-# run_SCDE <- function(SCEdata, condition.name=NULL, covariates=NULL,
-#                      expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL) {
-#   message("scde")
-#   L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name,
-#                      expression.unit = expression.unit, covariates = NULL, ncores = ncores)
-# 
-#   session_info <- sessionInfo()
-# 
-#   timing <- system.time({
-#     intcount <- apply(L$expr.data, 2, function(x) {storage.mode(x) <- 'integer'; x})
-#     o.ifm <- scde.error.models(counts = intcount, groups = as.factor(unname(L$col.data[, L$conditions])), n.cores = L$n.cores,
-#                                save.crossfit.plots = FALSE, save.model.plots = FALSE,
-#                                verbose = 0, min.size.entries = min(2000, nrow(L$count) - 1))
-#     valid.cells <- o.ifm$corr.a > 0
-#     #table(valid.cells)
-#     o.ifm <- o.ifm[valid.cells, ]
-#     o.prior <- scde.expression.prior(models = o.ifm, counts = intcount[, valid.cells],
-#                                      length.out = 400, show.plot = FALSE)
-#     grp <- factor(L$col.data[which(valid.cells), L$conditions])
-#     names(grp) <- rownames(o.ifm)
-#     ediff <- scde.expression.difference(o.ifm, intcount[, valid.cells], o.prior,
-#                                         groups = grp, n.randomizations = 100,
-#                                         n.cores = L$n.cores, verbose = 0)
-#     p.values <- 2*pnorm(abs(ediff$Z), lower.tail = FALSE)
-#     p.values.adj <- 2*pnorm(abs(ediff$cZ), lower.tail = FALSE)
-#   })
-# 
-#   #hist(p.values, 50)
-#   #hist(p.values.adj, 50)
-# 
-#   list(session_info = session_info,
-#        timing = timing,
-#        res = ediff,
-#        df = data.frame(pval = p.values,
-#                        qval = p.values.adj,
-#                        score = abs(ediff$Z),
-#                        row.names = rownames(ediff)))
-# }
-
-
-# #scDD
-# suppressPackageStartupMessages(library(SummarizedExperiment))
-# suppressPackageStartupMessages(library(scran))
-# suppressPackageStartupMessages(library(scDD))
-# run_scDD <- function(SCEdata, condition.name=NULL, covariates=NULL,
-#                       expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL) {
-#   message("scDD")
-# 
-#   L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name,
-#                      expression.unit = expression.unit, covariates = covariates, ncores = ncores)
-#   if("total_features" %in% colnames(L$col.data)){
-#     L$col.data[, "total_features"] <- scale(L$col.data[, "total_features"])
-#   }
-#   session_info <- sessionInfo()
-#   tryCatch({
-#     timing <- system.time({
-#       # scDatList <- list()
-#       # (groups <- unique(L$condt))
-#       # for (i in 1:length(groups)) {
-#       #   scDatList[[paste0("G", i)]] <- as.matrix(L$count[, which(L$condt == groups[i])])
-#       # }
-#       scDatList <- SingleCellExperiment(assays=list(counts=L$expr.data),
-#                                         colData=L$col.data)
-#       datNorm.scran <- scDD::preprocess(scDatList,
-#                                         condition = L$conditions,
-#                                         zero.thresh = 1, scran_norm = TRUE)
-#       condition <- L$col.data[colnames(datNorm.scran), L$conditions]
-#       condition <- as.numeric(as.factor(L$col.data[, L$conditions]))
-#       names(condition) <- colnames(datNorm.scran)
-# 
-#       SDSumExp <-SingleCellExperiment(assays = list("normcounts" = normcounts(datNorm.scran)),
-#                                        colData = data.frame(condition))
-#       prior_param <- list(alpha = 0.01, mu0 = 0, s0 = 0.01, a0 = 0.01, b0 = 0.01)
-#       scd <- scDD(SDSumExp, prior_param = prior_param, testZeroes = FALSE,
-#                   condition = "condition", min.size = 3, min.nonzero = NULL)
-#       res <- scDD::results(scd)
-#     })
-# 
-#     #hist(res$nonzero.pvalue, 50)
-#     #hist(res$nonzero.pvalue.adj, 50)
-# 
-#     list(session_info = session_info,
-#          timing = timing,
-#          res = res,
-#          df = data.frame(pval = res$nonzero.pvalue,
-#                          qval = res$nonzero.pvalue.adj,
-#                          row.names = rownames(res)))
-#   }, error = function(e) {
-#     "scDD results could not be calculated"
-#     list(session_info = session_info)
-#   })
-# }
 
 #SAMSeq
 suppressPackageStartupMessages(library(samr))
@@ -321,7 +193,6 @@ run_SAMseq <- function(SCEdata, condition.name=NULL, covariates=NULL, prop.zero=
       colnames(SAMseq.FDR) <- c("Score(d)", "FoldChange", "qval")
       rownames(SAMseq.FDR) <- rownames(L$expr.data)
       SAMseq.FDR[is.na(SAMseq.FDR[, 3]), 3] <- 1
-      #SAMseq.FDR[SAMseq.FDR[, 2]==0, 3] <- 1
     })
 
     #hist(SAMseq.FDR, 50)
@@ -336,52 +207,7 @@ run_SAMseq <- function(SCEdata, condition.name=NULL, covariates=NULL, prop.zero=
   })
 }
 
-# ## limma Voom
-# suppressPackageStartupMessages(library(limma))
-# suppressPackageStartupMessages(library(edgeR))
-# 
-# run_voomlimma <- function(SCEdata, condition.name=NULL, covariates=NULL,
-#                           expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL) {
-#   message("voomlimma")
-# 
-#   L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name,
-#                      expression.unit = expression.unit, covariates = covariates, ncores = ncores)
-#   if("total_features" %in% colnames(L$col.data)){
-#     L$col.data[, "total_features"] <- scale(L$col.data[, "total_features"])
-#   }
-# 
-#   session_info <- sessionInfo()
-#   timing <- system.time({
-#     dge <- DGEList(L$expr.data, group = L$col.data[, L$conditions])
-#     dge <- calcNormFactors(dge)
-# 
-#     ff = colnames(L$col.data)
-#     form.ff = sapply(ff, function(f) {
-#       paste0("L$col.data$", f)
-#     }, USE.NAMES = FALSE)
-#     design <- model.matrix(as.formula(paste("~", paste(form.ff, collapse = "+"))))
-# 
-#     vm <- voom(dge, design = design, plot = FALSE)
-#     fit <- lmFit(vm, design = design)
-#     fit <- eBayes(fit)
-#     tt <- topTable(fit, n = Inf, adjust.method = "BH", sort.by = "none")
-#   })
-# 
-#   #hist(tt$P.Value, 50)
-#   #hist(tt$adj.P.Val, 50)
-# 
-#   #limma::plotMDS(dge, col = as.numeric(as.factor(L$condt)), pch = 19)
-#   #plotMD(fit)
-# 
-#   list(session_info = session_info,
-#        timing = timing,
-#        tt = tt,
-#        df = data.frame(pval = tt$P.Value,
-#                        qval = tt$adj.P.Val,
-#                        row.names = rownames(tt)))
-# }
-# 
-# 
+
 # ## Zinger +edgeR GLM
 suppressPackageStartupMessages(library(edgeR))
 suppressPackageStartupMessages(library(zingeR))
@@ -431,6 +257,9 @@ run_edgeR_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, prop
                        row.names = rownames(tt$table)))
 }
 # # 
+  
+  
+  
 # # ## DESeq2 + Zinger
 suppressPackageStartupMessages(library(DESeq2))
 suppressPackageStartupMessages(library(zingeR))
@@ -484,68 +313,3 @@ run_DESeq2_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, pro
          res = res,
          df = res)
 }
-
-
-#ROTSvoom
-# suppressPackageStartupMessages(library(ROTS))
-# suppressPackageStartupMessages(library(edgeR))
-# 
-# run_ROTSvoom <- function(SCEdata, condition.name=NULL, covariates=NULL,
-#                          expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL) {
-#   message("ROTS, voom")
-#   L <- prepare_input(SCEdata = SCEdata, condition.name = condition.name, 
-#                      expression.unit = expression.unit, covariates = covariates, ncores = ncores)
-#   
-#   session_info <- sessionInfo()
-#   timing <- system.time({
-#     stopifnot(all(rownames(L$col.data) == colnames(L$expr.data)))
-#     grp <- as.factor(L$col.data[, L$conditions])
-#     dge <- DGEList(counts = L$expr.data)
-#     dge <- edgeR::calcNormFactors(dge)
-#     vm <- voom(dge, design = model.matrix(~ grp))
-#     rots <- ROTS(data = vm$E, groups = as.numeric(grp), B = 1000, K = 1000, log = TRUE, seed = 123,
-#                  progress =TRUE)
-#   })
-#   
-#   # hist(rots$pvalue, 50)
-#   # hist(rots$FDR, 50)
-#   # hist(rots$logfc, 50)
-#   # print(rots$R)
-#   # print(rots$Z)
-#   # print(rots$k)
-#   # print(rots$a1)
-#   # print(rots$a2)
-#   
-#   list(session_info = session_info,
-#        timing = timing,
-#        res = rots,
-#        df = data.frame(pval = rots$pvalue,
-#                        qval = p.adjust(rots$pvalue, method = "BH"),
-#                        row.names = rownames(rots$data)))
-# }
-#------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
