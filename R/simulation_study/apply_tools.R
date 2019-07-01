@@ -1,5 +1,5 @@
-source("PIMSeq/main_codes/wrapFunction.R")
-source("PIMSeq/tools/tools_wrap_functions.R")
+
+source(".../tools_wrap_functions.R")
 
 # ------------ SPsimSeq simulated data analysis A -------------------------------
 sim.data.sp <- readRDS(".../sp.sim.dataA.rds")
