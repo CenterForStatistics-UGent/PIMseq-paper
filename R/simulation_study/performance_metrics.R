@@ -38,7 +38,7 @@ perf.list <- list(
       edgeR_Zinger  = calcFDP_TPR(runZinger_edgeR),
       DESeq2_Zinger = calcFDP_TPR(runZinger_DESeq2, test = "padj")
    ) 
-saveRDS(perf.list, "/SPsimA/perf.list.rds")
+saveRDS(perf.list, ".../SPsimA/perf.list.rds")
 
 # --------- Splat simulation A ------------------------------
 runPIMSeq  <- readRDS(".../NBsimA/runPIMSeq.rds")
@@ -55,7 +55,38 @@ perf.list <- list(
       edgeR_Zinger  = calcFDP_TPR(runZinger_edgeR),
       DESeq2_Zinger = calcFDP_TPR(runZinger_DESeq2, test = "padj")
    ) 
-saveRDS(perf.list, "/NBsimA/perf.list.rds")
+saveRDS(perf.list, ".../NBsimA/perf.list.rds")
+
+# ----------  Figure 2
+perf.list1 <- readRDS(".../SPsimA/perf.list.rds") 
+names(perf.list1) <- c("PIM", "MAST", "SAMSeq", "edgeR + Zinger","DESeq2 +Zinger")
+ 
+par(mfrow=c(1,2))
+plot(c(0, 1), c(0, 1), type="n", xlab="FDR", ylab="TPR", las=1, xlim=c(0, 0.4), ylim=c(0, 1),
+     main="Semi-parametric simulation")
+for(i in 1:length(perf.list1)){
+  lines(perf.list1[[i]]$fdp, perf.list1[[i]]$tpp, col=i, lwd=3)
+  points(perf.list1[[i]]$fdp[perf.list1[[i]]$nom.fdr==0.05], 
+         perf.list1[[i]]$tpp[perf.list1[[i]]$nom.fdr==0.05], col=i, pch=19, cex=2)
+}
+abline(0, 1, lty=3) ; abline(v=0.05, lty=3)
+legend("bottomright", names(perf.list1), col=1:length(perf.list1), lty=1, lwd = 2, pch=19)
+
+
+perf.list2 <- readRDS(".../NBsimA/perf.list.rds")  
+names(perf.list1) <- c("PIM", "MAST", "SAMSeq", "edgeR + Zinger","DESeq2 +Zinger")
+ 
+plot(c(0, 1), c(0, 1), type="n", xlab="FDR", ylab="TPR", las=1, xlim=c(0, 0.4), ylim=c(0, 1),
+     main="Negative binomial simulation")
+for(i in 1:length(perf.list1)){
+  lines(perf.list1[[i]]$fdp, perf.list1[[i]]$tpp, col=i, lwd=3)
+  points(perf.list1[[i]]$fdp[perf.list1[[i]]$nom.fdr==0.05], 
+         perf.list1[[i]]$tpp[perf.list1[[i]]$nom.fdr==0.05], col=i, pch=19, cex=2)
+}
+abline(0, 1, lty=3) ; abline(v=0.05, lty=3)
+legend("bottomright", names(perf.list1), col=1:length(perf.list1), lty=1, lwd = 2, pch=19)
+
+
 
 
 
@@ -94,3 +125,32 @@ perf.list <- list(
       DESeq2_Zinger = calcFDP_TPR(runZinger_DESeq2, test = "padj")
    ) 
 saveRDS(perf.list, "/NBsimB/perf.list.rds")
+
+# ----------  Figure 3
+perf.list1 <- readRDS(".../SPsimB/perf.list.rds") 
+names(perf.list1) <- c("PIM", "MAST", "SAMSeq", "edgeR + Zinger","DESeq2 +Zinger")
+ 
+par(mfrow=c(1,2))
+plot(c(0, 1), c(0, 1), type="n", xlab="FDR", ylab="TPR", las=1, xlim=c(0, 0.4), ylim=c(0, 1),
+     main="Semi-parametric simulation")
+for(i in 1:length(perf.list1)){
+  lines(perf.list1[[i]]$fdp, perf.list1[[i]]$tpp, col=i, lwd=3)
+  points(perf.list1[[i]]$fdp[perf.list1[[i]]$nom.fdr==0.05], 
+         perf.list1[[i]]$tpp[perf.list1[[i]]$nom.fdr==0.05], col=i, pch=19, cex=2)
+}
+abline(0, 1, lty=3) ; abline(v=0.05, lty=3)
+legend("bottomright", names(perf.list1), col=1:length(perf.list1), lty=1, lwd = 2, pch=19)
+
+
+perf.list2 <- readRDS(".../NBsimB/perf.list.rds")  
+names(perf.list1) <- c("PIM", "MAST", "SAMSeq", "edgeR + Zinger","DESeq2 +Zinger")
+ 
+plot(c(0, 1), c(0, 1), type="n", xlab="FDR", ylab="TPR", las=1, xlim=c(0, 0.4), ylim=c(0, 1),
+     main="Negative binomial simulation")
+for(i in 1:length(perf.list1)){
+  lines(perf.list1[[i]]$fdp, perf.list1[[i]]$tpp, col=i, lwd=3)
+  points(perf.list1[[i]]$fdp[perf.list1[[i]]$nom.fdr==0.05], 
+         perf.list1[[i]]$tpp[perf.list1[[i]]$nom.fdr==0.05], col=i, pch=19, cex=2)
+}
+abline(0, 1, lty=3) ; abline(v=0.05, lty=3)
+legend("bottomright", names(perf.list1), col=1:length(perf.list1), lty=1, lwd = 2, pch=19)
