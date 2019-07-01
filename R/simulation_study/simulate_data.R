@@ -10,7 +10,7 @@ Ux <- as.character(unique(X0))
 scNGP.polyA2 <- scNGP.polyA[rowSums(counts(scNGP.polyA[, X0==Ux[1]])>1)>=5 & rowSums(counts(scNGP.polyA[, X0==Ux[2]])>1)>=5,] 
 dim(scNGP.polyA2) 
 s.data <- scNGP.polyA2
-saveRDS(".../s.dataA.rds")
+saveRDS(s.data, ".../s.dataA.rds")
 
 X <- colData(s.data)$characteristics..treatment
 library(SPsimSeq)
