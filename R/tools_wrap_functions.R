@@ -82,8 +82,8 @@ prepareInput <- function(SCEdata, condition.name, expression.unit, covariates, n
 #PIMSeq
 library(PIMseq)
 run_PIMseq <- function(SCEdata, condition.name=NULL, covariates=NULL, 
-                     expression.unit="counts", prop.zero=0.99, coxph.aprox=FALSE,
-                     ncores=1) {
+                       expression.unit="counts", prop.zero=0.99, coxph.aprox=FALSE,
+                       ncores=1) {
   message("PIMSeq")
   SCEdata <- SCEdata[rowMeans(counts(SCEdata)==0)<prop.zero, ]
   #L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name, p = prop.zero,
@@ -93,7 +93,8 @@ run_PIMseq <- function(SCEdata, condition.name=NULL, covariates=NULL,
   tryCatch({
     timing <- system.time({
       pim.res <- PIMSeq(SCExp = SCEdata, condition = condition.name, nuisance.vars = covariates,
-                        assay.name = expression.unit, coxph.aprox=coxph.aprox)
+                        assay.name = expression.unit, coxph.aprox=coxph.aprox, 
+                        BPPARAM = BiocParallel::SnowParam())
     })
     
     #hist(mast[, "hurdle", "Pr(>Chisq)"], 50)
@@ -116,10 +117,10 @@ run_MAST <- function(SCEdata, condition.name=NULL, covariates=NULL,
                      expression.unit, prop.zero=0.99,
                      ncores=NULL) {
   message("MAST, CPM (including detection rate)")
-
+  
   L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name, p = prop.zero,
-                     expression.unit = expression.unit, covariates = covariates, ncores = ncores)
-
+                    expression.unit = expression.unit, covariates = covariates, ncores = ncores)
+  
   session_info <- sessionInfo()
   tryCatch({
     timing <- system.time({
@@ -142,9 +143,9 @@ run_MAST <- function(SCEdata, condition.name=NULL, covariates=NULL,
       }
       mast <- lrTest(zlmdata, "grp")
     })
-
+    
     #hist(mast[, "hurdle", "Pr(>Chisq)"], 50)
-
+    
     list(session_info = session_info,
          timing = timing,
          res = list(mast=mast, zlmdata=zlmdata),
@@ -153,9 +154,9 @@ run_MAST <- function(SCEdata, condition.name=NULL, covariates=NULL,
                          qval = p.adjust(mast[, "hurdle", "Pr(>Chisq)"], method = "BH"),
                          row.names = names(mast[, "hurdle", "Pr(>Chisq)"])),
          df2 = data.frame(test.stat = mast[, "disc", "lambda"],
-                         pval = mast[, "disc", "Pr(>Chisq)"],
-                         qval = p.adjust(mast[, "disc", "Pr(>Chisq)"], method = "BH"),
-                         row.names = names(mast[, "disc", "Pr(>Chisq)"])))
+                          pval = mast[, "disc", "Pr(>Chisq)"],
+                          qval = p.adjust(mast[, "disc", "Pr(>Chisq)"], method = "BH"),
+                          row.names = names(mast[, "disc", "Pr(>Chisq)"])))
   }, error = function(e) {
     "MASTcpmDetRate results could not be calculated"
     list(session_info = session_info)
@@ -171,8 +172,8 @@ run_SAMseq <- function(SCEdata, condition.name=NULL, covariates=NULL, prop.zero=
   message("SAMseq")
   message("Any covariate is ignored.")
   L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name, p = prop.zero,
-                     expression.unit = expression.unit, covariates = covariates, ncores = ncores)
-
+                    expression.unit = expression.unit, covariates = covariates, ncores = ncores)
+  
   session_info <- sessionInfo()
   tryCatch({
     timing <- system.time({
@@ -194,9 +195,9 @@ run_SAMseq <- function(SCEdata, condition.name=NULL, covariates=NULL, prop.zero=
       rownames(SAMseq.FDR) <- rownames(L$expr.data)
       SAMseq.FDR[is.na(SAMseq.FDR[, 3]), 3] <- 1
     })
-
+    
     #hist(SAMseq.FDR, 50)
-
+    
     list(session_info = session_info,
          timing = timing,
          res = SAMseq.result.table,
@@ -213,11 +214,11 @@ suppressPackageStartupMessages(library(edgeR))
 suppressPackageStartupMessages(library(zingeR))
 
 run_edgeR_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, prop.zero=0.95,
-                         expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL, LS=NULL) {
+                             expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL, LS=NULL) {
   message("edgeRLRT")
-
+  
   L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name, p=prop.zero,
-                     expression.unit = expression.unit, covariates = covariates, ncores = ncores)
+                    expression.unit = expression.unit, covariates = covariates, ncores = ncores)
   if("total_features" %in% colnames(L$col.data)){
     L$col.data[, "total_features"] <- scale(L$col.data[, "total_features"])
   }
@@ -228,13 +229,13 @@ run_edgeR_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, prop
       dge$samples$lib.size <- LS
     }
     dge <- suppressWarnings(calcNormFactors(dge))
-
+    
     ff = 1:length(colnames(L$col.data))
     form.ff = sapply(ff, function(f) {
       paste("L$col.data[,", f,"]")
     }, USE.NAMES = FALSE)
     design <- model.matrix(as.formula(paste("~", paste(form.ff, collapse = "+"))))
-
+    
     weights <- zeroWeightsLS(counts=dge$counts, design=design, maxit=300, normalization="TMM") #Zinger
     dge$weights <- weights
     dge=estimateDisp(dge, design)
@@ -242,13 +243,13 @@ run_edgeR_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, prop
     lrt <- glmWeightedF(fit, coef=2, independentFiltering = TRUE)
     tt  <- topTags(lrt, n = Inf, sort.by = "none")
   })
-
+  
   # plotBCV(dge)
   # hist(tt$table$PValue, 50)
   # hist(tt$table$FDR, 50)
   # limma::plotMDS(dge, col = as.numeric(as.factor(L$condt)), pch = 19)
   # plotSmear(lrt)
-
+  
   list(session_info = session_info,
        timing = timing,
        tt = tt,
@@ -257,18 +258,18 @@ run_edgeR_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, prop
                        row.names = rownames(tt$table)))
 }
 # # 
-  
-  
-  
+
+
+
 # # ## DESeq2 + Zinger
 suppressPackageStartupMessages(library(DESeq2))
 suppressPackageStartupMessages(library(zingeR))
 
 run_DESeq2_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, prop.zero=0.95,
-                       expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL) {
+                              expression.unit= c("count", "TPM", "CPM", "Census"), ncores=NULL) {
   message("DESeq2")
   L <- prepareInput(SCEdata = SCEdata, condition.name = condition.name, p=prop.zero,
-                     expression.unit = expression.unit, covariates = covariates, ncores = ncores)
+                    expression.unit = expression.unit, covariates = covariates, ncores = ncores)
   if("total_features" %in% colnames(L$col.data)){
     L$col.data[, "total_features"] <- scale(L$col.data[, "total_features"]) 
   }
@@ -276,40 +277,40 @@ run_DESeq2_Zinger <- function(SCEdata, condition.name=NULL, covariates=NULL, pro
   L$col.data[, condition.name] <- as.factor(L$col.data[, condition.name])
   session_info <- sessionInfo()
   timing <- system.time({
-
-      ff = colnames(L$col.data)
-      form.ff = sapply(ff, function(f) {
-        paste(f)
-      }, USE.NAMES = FALSE)
-
-      colData=L$col.data
-
-      design <- as.formula(paste("~", paste(form.ff, collapse = "+")))
-
-      dds <- DESeqDataSetFromMatrix(countData = round(L$expr.data),
-                                    colData = L$col.data,
-                                    design = design)
-      weights <- zeroWeightsLS(counts=L$expr.data, design=model.matrix(design, data=L$col.data), maxit=300,
-                               normalization="DESeq2_poscounts", colData=colData,
-                               designFormula=design)
-      assays(dds)[["weights"]]= weights
-
-      dse = DESeq2::estimateSizeFactors(dds, type="poscounts")
-      dse = estimateDispersions(dse)
-      dse = nbinomWaldTest(dse, betaPrior=TRUE, useT=TRUE, df=rowSums(weights)-2)
-      res = DESeq2::results(dse, contrast = c(L$conditions, levels(factor(L$col.data[, L$conditions]))[1],
-                                       levels(factor(L$col.data[, L$conditions]))[2]),
-                            independentFiltering=FALSE)
-      #res$qval <- p.adjust(res$pvalue, method = "BH")
-      res$padj[is.na(res$padj)] <- 1
-    })
-
-    #plotDispEsts(dds)
-    #plotMA(res)
-    #summary(res)
-
-    list(session_info = session_info,
-         timing = timing,
-         res = res,
-         df = res)
+    
+    ff = colnames(L$col.data)
+    form.ff = sapply(ff, function(f) {
+      paste(f)
+    }, USE.NAMES = FALSE)
+    
+    colData=L$col.data
+    
+    design <- as.formula(paste("~", paste(form.ff, collapse = "+")))
+    
+    dds <- DESeqDataSetFromMatrix(countData = round(L$expr.data),
+                                  colData = L$col.data,
+                                  design = design)
+    weights <- zeroWeightsLS(counts=L$expr.data, design=model.matrix(design, data=L$col.data), maxit=300,
+                             normalization="DESeq2_poscounts", colData=colData,
+                             designFormula=design)
+    assays(dds)[["weights"]]= weights
+    
+    dse = DESeq2::estimateSizeFactors(dds, type="poscounts")
+    dse = estimateDispersions(dse)
+    dse = nbinomWaldTest(dse, betaPrior=TRUE, useT=TRUE, df=rowSums(weights)-2)
+    res = DESeq2::results(dse, contrast = c(L$conditions, levels(factor(L$col.data[, L$conditions]))[1],
+                                            levels(factor(L$col.data[, L$conditions]))[2]),
+                          independentFiltering=FALSE)
+    #res$qval <- p.adjust(res$pvalue, method = "BH")
+    res$padj[is.na(res$padj)] <- 1
+  })
+  
+  #plotDispEsts(dds)
+  #plotMA(res)
+  #summary(res)
+  
+  list(session_info = session_info,
+       timing = timing,
+       res = res,
+       df = res)
 }
